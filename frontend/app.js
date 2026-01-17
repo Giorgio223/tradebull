@@ -39,6 +39,7 @@ function setupTelegramUI() {
 
 let chart, candleSeries;
 let lastRoundId = null;
+let lastGoldMult = 0;
 
 function initChart() {
   const container = document.getElementById("tvchart");
@@ -52,6 +53,7 @@ function initChart() {
     crosshair: { mode: 1 },
   });
 
+  // lightweight-charts v5+ API
   candleSeries = chart.addSeries(LightweightCharts.CandlestickSeries, {
     upColor: "#2ecc71",
     downColor: "#e74c3c",
@@ -67,10 +69,37 @@ function initChart() {
   ro.observe(container);
 }
 
-function pointsToCandles(points, baseTimeSec, candlesCount) {
-  if (!points || points.length < 2) return [];
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+/**
+ * Делает "живой" график:
+ * - В BET показываем почти ничего (плоско/мало свечей)
+ * - В RUN постепенно раскрываем points по прогрессу (как realtime)
+ * - В DONE показываем всё
+ */
+function slicePointsByProgress(points, phase, server_ms, start_ms, end_ms) {
+  if (!points || points.length < 2) return points || [];
+
+  if (phase === "DONE") return points;
+
+  if (phase === "BET") {
+    // показываем минимум, чтобы было видно что график есть
+    return points.slice(0, Math.min(points.length, 12));
+  }
+
+  // RUN
   const total = points.length;
-  const chunk = Math.max(2, Math.floor(total / candlesCount));
+  const prog = clamp((server_ms - start_ms) / Math.max(1, (end_ms - start_ms)), 0, 1);
+  const n = Math.max(2, Math.floor(prog * total));
+  return points.slice(0, n);
+}
+
+function pointsToCandles(points, baseTimeSec, candlesTarget = 60) {
+  if (!points || points.length < 2) return [];
+
+  const total = points.length;
+  const chunk = Math.max(2, Math.floor(total / candlesTarget));
+
   const candles = [];
   let t = baseTimeSec;
 
@@ -84,7 +113,7 @@ function pointsToCandles(points, baseTimeSec, candlesCount) {
     for (const p of slice) { if (p > h) h = p; if (p < l) l = p; }
 
     candles.push({ time: t, open: o, high: h, low: l, close: c });
-    t += 1;
+    t += 1; // 1 сек на свечу
   }
 
   return candles;
@@ -106,6 +135,24 @@ function updateTimer(phase, server_ms, start_ms, end_ms) {
   el("timer").textContent = text;
 }
 
+function setGoldStyle(isGold) {
+  if (isGold) {
+    candleSeries.applyOptions({
+      upColor: "#f5c542",
+      downColor: "#f5c542",
+      wickUpColor: "#f5c542",
+      wickDownColor: "#f5c542",
+    });
+  } else {
+    candleSeries.applyOptions({
+      upColor: "#2ecc71",
+      downColor: "#e74c3c",
+      wickUpColor: "#2ecc71",
+      wickDownColor: "#e74c3c",
+    });
+  }
+}
+
 async function refresh() {
   const user_id = getUserId();
   el("userLabel").textContent = user_id;
@@ -113,7 +160,7 @@ async function refresh() {
   const init = await jget(`/init?user_id=${encodeURIComponent(user_id)}`);
   el("balance").textContent = fmt(init.balance);
 
-  // ВАЖНО: /series МАЛЕНЬКИМИ
+  // ВАЖНО: /series маленькими
   const s = await jget(`/series`);
 
   el("roundId").textContent = String(s.round_id);
@@ -121,26 +168,31 @@ async function refresh() {
   el("gold").textContent = s.gold_mult ? ("x" + s.gold_mult) : "—";
   updateTimer(s.phase, s.server_ms, s.start_ms, s.end_ms);
 
+  // Если начался новый раунд — обновим стиль золота (и запомним)
   if (lastRoundId !== s.round_id) {
     lastRoundId = s.round_id;
-    const baseTime = Math.floor(Date.now() / 1000) - 60;
-    const candles = pointsToCandles(s.points, baseTime, 60);
-    candleSeries.setData(candles);
-
-    if (s.gold_mult && candles.length) {
-      candleSeries.applyOptions({
-        upColor: "#f5c542", downColor: "#f5c542",
-        wickUpColor: "#f5c542", wickDownColor: "#f5c542",
-      });
-      setTimeout(() => {
-        candleSeries.applyOptions({
-          upColor: "#2ecc71", downColor: "#e74c3c",
-          wickUpColor: "#2ecc71", wickDownColor: "#e74c3c",
-        });
-      }, 900);
-    }
+    lastGoldMult = s.gold_mult || 0;
+    setGoldStyle(lastGoldMult > 0);
   }
 
+  // === ВОТ ГДЕ "реалтайм" ===
+  // Берем points и показываем только часть по прогрессу
+  const visiblePoints = slicePointsByProgress(
+    s.points,
+    s.phase,
+    s.server_ms,
+    s.start_ms,
+    s.end_ms
+  );
+
+  // Базовое время свечей привяжем к start_ms раунда (красиво по оси времени)
+  // Чтобы свечи "шли вперед", делаем базу за 60 сек до start_ms
+  const baseTime = Math.floor((s.start_ms / 1000) - 60);
+
+  const candles = pointsToCandles(visiblePoints, baseTime, 60);
+  candleSeries.setData(candles);
+
+  // Моя ставка
   const my = await jget(`/mybet?user_id=${encodeURIComponent(user_id)}`);
   if (my.bet) {
     el("status").innerHTML =
@@ -168,6 +220,6 @@ setupTelegramUI();
 initChart();
 
 refresh().catch(err => el("status").textContent = String(err));
-setInterval(() => refresh().catch(()=>{}), 1000);
+setInterval(() => refresh().catch(()=>{}), 250); // чаще, чтобы выглядело живо
 
 window.placeBet = placeBet;
