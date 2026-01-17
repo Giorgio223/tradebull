@@ -52,7 +52,7 @@ function initChart() {
     crosshair: { mode: 1 },
   });
 
-  candleSeries = chart.addCandlestickSeries({
+  candleSeries = chart.addSeries(LightweightCharts.CandlestickSeries, {
     upColor: "#2ecc71",
     downColor: "#e74c3c",
     borderVisible: false,
