@@ -1,13 +1,8 @@
-// В проде тут будет твой домен API (например https://api.tradebull.xyz)
-// Пока локально:
+// ✅ ТВОЙ ПРОД-БЭК (Render)
 const API = "https://tradebull-backend.onrender.com";
 
 const el = (id) => document.getElementById(id);
-
-function fmt(n) {
-  if (n === null || n === undefined) return "—";
-  return (typeof n === "number") ? n.toFixed(2) : String(n);
-}
+const fmt = (n) => (n === null || n === undefined) ? "—" : (typeof n === "number" ? n.toFixed(2) : String(n));
 
 async function jget(path) {
   const res = await fetch(API + path);
@@ -26,12 +21,12 @@ async function jpost(path, body) {
   return JSON.parse(txt);
 }
 
+// ===== Telegram user_id (если не Telegram — test1) =====
 function getUserId() {
   try {
     const tg = window.Telegram?.WebApp;
-    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.id) {
-      return String(tg.initDataUnsafe.user.id);
-    }
+    const id = tg?.initDataUnsafe?.user?.id;
+    if (id) return String(id);
   } catch {}
   return "test1";
 }
@@ -39,44 +34,88 @@ function getUserId() {
 function setupTelegramUI() {
   try {
     const tg = window.Telegram?.WebApp;
-    if (tg) {
-      tg.ready();
-      tg.expand();
-    }
+    if (tg) { tg.ready(); tg.expand(); }
   } catch {}
 }
 
-function draw(points) {
-  const c = el("chart");
-  const ctx = c.getContext("2d");
-  ctx.clearRect(0,0,c.width,c.height);
+// ===== Lightweight Charts =====
+let chart, candleSeries;
+let lastRoundId = null;
 
-  if (!points || points.length < 2) {
-    ctx.fillText("no data", 20, 20);
-    return;
+function initChart() {
+  const container = document.getElementById("tvchart");
+
+  // window.LightweightCharts из standalone build
+  const { createChart } = window.LightweightCharts;
+
+  chart = createChart(container, {
+    layout: {
+      background: { color: "#0f1722" },
+      textColor: "#cfe0f5",
+    },
+    grid: {
+      vertLines: { color: "#1b2735" },
+      horzLines: { color: "#1b2735" },
+    },
+    rightPriceScale: {
+      borderColor: "#1b2735",
+    },
+    timeScale: {
+      borderColor: "#1b2735",
+      timeVisible: true,
+      secondsVisible: true,
+    },
+    crosshair: { mode: 1 },
+  });
+
+  candleSeries = chart.addCandlestickSeries({
+    upColor: "#2ecc71",
+    downColor: "#e74c3c",
+    borderVisible: false,
+    wickUpColor: "#2ecc71",
+    wickDownColor: "#e74c3c",
+  });
+
+  // адаптация под ресайз
+  const ro = new ResizeObserver(() => {
+    const r = container.getBoundingClientRect();
+    chart.applyOptions({ width: Math.floor(r.width), height: Math.floor(r.height) });
+  });
+  ro.observe(container);
+}
+
+// points[] -> candles[] (OHLC) по чанкам
+function pointsToCandles(points, baseTimeSec, candlesCount) {
+  if (!points || points.length < 2) return [];
+
+  // хотим candlesCount свечей, например 60
+  const total = points.length;
+  const chunk = Math.max(2, Math.floor(total / candlesCount));
+
+  const candles = [];
+  let t = baseTimeSec;
+
+  for (let i = 0; i < total; i += chunk) {
+    const slice = points.slice(i, Math.min(total, i + chunk));
+    if (slice.length < 2) break;
+
+    const o = slice[0];
+    const c = slice[slice.length - 1];
+    let h = -Infinity, l = Infinity;
+    for (const p of slice) { if (p > h) h = p; if (p < l) l = p; }
+
+    candles.push({
+      time: t, // seconds
+      open: o,
+      high: h,
+      low: l,
+      close: c,
+    });
+
+    t += 1; // 1 сек на свечу (визуально биржево)
   }
 
-  const pad = 18;
-  const w = c.width - pad*2;
-  const h = c.height - pad*2;
-
-  let mn = Math.min(...points);
-  let mx = Math.max(...points);
-  if (mx - mn < 1e-6) { mx += 1; mn -= 1; }
-
-  ctx.strokeRect(pad, pad, w, h);
-
-  ctx.beginPath();
-  for (let i=0;i<points.length;i++) {
-    const x = pad + (i/(points.length-1))*w;
-    const y = pad + (1 - (points[i]-mn)/(mx-mn))*h;
-    if (i===0) ctx.moveTo(x,y);
-    else ctx.lineTo(x,y);
-  }
-  ctx.stroke();
-
-  ctx.fillText("max " + mx.toFixed(2), pad+6, pad+12);
-  ctx.fillText("min " + mn.toFixed(2), pad+6, pad+h-6);
+  return candles;
 }
 
 function updateTimer(phase, server_ms, start_ms, end_ms) {
@@ -102,12 +141,46 @@ async function refresh() {
   const init = await jget(`/init?user_id=${encodeURIComponent(user_id)}`);
   el("balance").textContent = fmt(init.balance);
 
-  const series = await jget(`/series`);
-  el("roundId").textContent = String(series.round_id);
-  el("phase").textContent = series.phase;
-  el("gold").textContent = series.gold_mult ? ("x" + series.gold_mult) : "—";
-  updateTimer(series.phase, series.server_ms, series.start_ms, series.end_ms);
-  draw(series.points);
+  const s = await jget(`/series`);
+
+  el("roundId").textContent = String(s.round_id);
+  el("phase").textContent = s.phase;
+  el("gold").textContent = s.gold_mult ? ("x" + s.gold_mult) : "—";
+  updateTimer(s.phase, s.server_ms, s.start_ms, s.end_ms);
+
+  // если сменился раунд — перерисуем весь датасет
+  if (lastRoundId !== s.round_id) {
+    lastRoundId = s.round_id;
+
+    // 60 свечей для видимого окна (можно 90/120)
+    const baseTime = Math.floor(Date.now() / 1000) - 60;
+    const candles = pointsToCandles(s.points, baseTime, 60);
+
+    candleSeries.setData(candles);
+
+    // gold: если есть gold_mult — сделаем ПОСЛЕДНЮЮ свечу "золотой" визуально
+    // (потом можно сделать детерминированный индекс по seed)
+    if (s.gold_mult && candles.length) {
+      const last = candles[candles.length - 1];
+      candleSeries.setData(candles); // уже стоит
+      // Простой лайфхак: меняем цвета серии под gold на пару секунд,
+      // чтобы было видно событие. Потом вернем обратно.
+      candleSeries.applyOptions({
+        upColor: "#f5c542",
+        downColor: "#f5c542",
+        wickUpColor: "#f5c542",
+        wickDownColor: "#f5c542",
+      });
+      setTimeout(() => {
+        candleSeries.applyOptions({
+          upColor: "#2ecc71",
+          downColor: "#e74c3c",
+          wickUpColor: "#2ecc71",
+          wickDownColor: "#e74c3c",
+        });
+      }, 900);
+    }
+  }
 
   const my = await jget(`/mybet?user_id=${encodeURIComponent(user_id)}`);
   if (my.bet) {
@@ -116,12 +189,6 @@ async function refresh() {
   } else {
     el("status").textContent = "No bet in this round";
   }
-
-  el("debug").textContent = JSON.stringify({
-    round_id: series.round_id,
-    phase: series.phase,
-    gold_mult: series.gold_mult
-  }, null, 2);
 }
 
 async function placeBet(side) {
@@ -132,17 +199,18 @@ async function placeBet(side) {
 
     const resp = await jpost("/bet", { user_id, side, amount, insurance });
 
-    el("status").innerHTML = `<span style="color:#0a7a0a;font-weight:700">BET OK</span> round ${resp.round_id}, balance ${resp.balance}`;
+    el("status").innerHTML = `<span class="ok">BET OK</span> round ${resp.round_id}, balance ${resp.balance}`;
     el("balance").textContent = fmt(resp.balance);
   } catch (e) {
-    el("status").innerHTML = `<span style="color:#b00020;font-weight:700">ERROR</span> ${String(e)}`;
+    el("status").innerHTML = `<span class="warn">ERROR</span> ${String(e)}`;
   }
 }
 
 setupTelegramUI();
+initChart();
 
 refresh().catch(err => el("status").textContent = String(err));
 setInterval(() => refresh().catch(()=>{}), 1000);
 
-// делаем функции доступными из HTML onclick
+// чтобы onclick работал
 window.placeBet = placeBet;

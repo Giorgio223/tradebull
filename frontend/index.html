@@ -4,83 +4,75 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>TradeBull</title>
+
+  <!-- Telegram WebApp (не мешает в браузере) -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- TradingView Lightweight Charts (standalone, window.LightweightCharts) -->
+  <!-- Файл-variant: lightweight-charts.standalone.production.js (IIFE) -->
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@5.1.0/dist/lightweight-charts.standalone.production.js"></script>
+  <!-- Документация по build variants: standalone/IIFE -> window.LightweightCharts -->
+  <!-- https://tradingview.github.io/lightweight-charts/docs (для справки) -->
+
   <style>
-    body { font-family: Arial, sans-serif; margin: 16px; }
+    body { font-family: Arial, sans-serif; margin: 16px; background:#0b0f14; color:#e8eef6; }
     .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
-    .card { border:1px solid #ddd; border-radius:12px; padding:12px; max-width:860px; }
-    #chart { border:1px solid #ddd; border-radius:12px; width: 820px; height: 280px; }
-    button { padding:10px 14px; border-radius:10px; border:1px solid #ccc; cursor:pointer; }
-    button.primary { border-color:#000; font-weight:700; }
-    input { padding:10px 12px; border-radius:10px; border:1px solid #ccc; width: 120px; }
+    .card { border:1px solid #1b2735; border-radius:14px; padding:14px; max-width:980px; background:#0f1722; }
+    .muted { color:#93a4b8; }
+    .big { font-size: 18px; font-weight: 800; }
+    button { padding:10px 14px; border-radius:12px; border:1px solid #263447; cursor:pointer; background:#121b28; color:#e8eef6; }
+    button.primary { border-color:#4b5563; font-weight:900; }
+    button.long { background:#0f2a1d; border-color:#1d6b45; }
+    button.short { background:#2a1516; border-color:#7a2b2f; }
+    input { padding:10px 12px; border-radius:12px; border:1px solid #263447; width: 120px; background:#0b1220; color:#e8eef6; }
     label { display:flex; align-items:center; gap:8px; }
-    .muted { color:#666; }
-    .big { font-size: 18px; font-weight: 700; }
-    .warn { color: #b00020; font-weight: 700; }
-    .ok { color: #0a7a0a; font-weight: 700; }
-    pre { white-space: pre-wrap; }
+    .warn { color: #ff6b6b; font-weight: 900; }
+    .ok { color: #3ee07a; font-weight: 900; }
+    #tvchart { width: 940px; height: 380px; border:1px solid #1b2735; border-radius:14px; overflow:hidden; }
+    .footer { font-size: 12px; color:#7f93aa; margin-top:10px; }
+    .pill { padding:4px 10px; border-radius:999px; border:1px solid #263447; background:#0b1220; }
   </style>
 </head>
 <body>
-  <h2>TradeBull</h2>
+  <h2 style="margin:0 0 12px 0;">TradeBull</h2>
 
   <div class="card">
     <div class="row">
-      <div>
-        <div class="muted">User</div>
-        <div class="big" id="userLabel">—</div>
-      </div>
-
-      <div>
-        <div class="muted">Balance</div>
-        <div class="big" id="balance">—</div>
-      </div>
-
-      <div>
-        <div class="muted">Round</div>
-        <div class="big" id="roundId">—</div>
-      </div>
-
-      <div>
-        <div class="muted">Phase</div>
-        <div class="big" id="phase">—</div>
-      </div>
-
-      <div>
-        <div class="muted">Gold</div>
-        <div class="big" id="gold">—</div>
-      </div>
+      <div class="pill"><span class="muted">User:</span> <span class="big" id="userLabel">—</span></div>
+      <div class="pill"><span class="muted">Balance:</span> <span class="big" id="balance">—</span></div>
+      <div class="pill"><span class="muted">Round:</span> <span class="big" id="roundId">—</span></div>
+      <div class="pill"><span class="muted">Phase:</span> <span class="big" id="phase">—</span></div>
+      <div class="pill"><span class="muted">Gold:</span> <span class="big" id="gold">—</span></div>
+      <div class="pill"><span class="muted">Timer:</span> <span class="big" id="timer">—</span></div>
     </div>
 
-    <div style="height:10px"></div>
+    <div style="height:12px"></div>
 
-    <canvas id="chart" width="820" height="280"></canvas>
+    <div id="tvchart"></div>
 
-    <div style="height:10px"></div>
+    <div style="height:12px"></div>
 
     <div class="row">
-      <div>
-        <div class="muted">Timer</div>
-        <div class="big" id="timer">—</div>
-      </div>
-
       <div>
         <div class="muted">Bet amount</div>
         <input id="amount" type="number" min="0.01" step="0.01" value="1" />
       </div>
 
-      <label>
+      <label style="margin-top:18px">
         <input id="insurance" type="checkbox" />
         Insurance (0.5)
       </label>
 
-      <button class="primary" onclick="placeBet('LONG')">LONG</button>
-      <button class="primary" onclick="placeBet('SHORT')">SHORT</button>
+      <button class="primary long" onclick="placeBet('LONG')">LONG</button>
+      <button class="primary short" onclick="placeBet('SHORT')">SHORT</button>
     </div>
 
     <div style="height:10px"></div>
     <div id="status" class="muted">—</div>
-    <pre id="debug" class="muted"></pre>
+
+    <div class="footer">
+      Charts by TradingView Lightweight Charts™ (Attribution required).
+    </div>
   </div>
 
   <script src="app.js"></script>
