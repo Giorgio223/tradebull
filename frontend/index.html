@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TradeBull</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 16px; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    .card { border:1px solid #ddd; border-radius:12px; padding:12px; max-width:860px; }
+    #chart { border:1px solid #ddd; border-radius:12px; width: 820px; height: 280px; }
+    button { padding:10px 14px; border-radius:10px; border:1px solid #ccc; cursor:pointer; }
+    button.primary { border-color:#000; font-weight:700; }
+    input { padding:10px 12px; border-radius:10px; border:1px solid #ccc; width: 120px; }
+    label { display:flex; align-items:center; gap:8px; }
+    .muted { color:#666; }
+    .big { font-size: 18px; font-weight: 700; }
+    .warn { color: #b00020; font-weight: 700; }
+    .ok { color: #0a7a0a; font-weight: 700; }
+    pre { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h2>TradeBull</h2>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <div class="muted">User</div>
+        <div class="big" id="userLabel">—</div>
+      </div>
+
+      <div>
+        <div class="muted">Balance</div>
+        <div class="big" id="balance">—</div>
+      </div>
+
+      <div>
+        <div class="muted">Round</div>
+        <div class="big" id="roundId">—</div>
+      </div>
+
+      <div>
+        <div class="muted">Phase</div>
+        <div class="big" id="phase">—</div>
+      </div>
+
+      <div>
+        <div class="muted">Gold</div>
+        <div class="big" id="gold">—</div>
+      </div>
+    </div>
+
+    <div style="height:10px"></div>
+
+    <canvas id="chart" width="820" height="280"></canvas>
+
+    <div style="height:10px"></div>
+
+    <div class="row">
+      <div>
+        <div class="muted">Timer</div>
+        <div class="big" id="timer">—</div>
+      </div>
+
+      <div>
+        <div class="muted">Bet amount</div>
+        <input id="amount" type="number" min="0.01" step="0.01" value="1" />
+      </div>
+
+      <label>
+        <input id="insurance" type="checkbox" />
+        Insurance (0.5)
+      </label>
+
+      <button class="primary" onclick="placeBet('LONG')">LONG</button>
+      <button class="primary" onclick="placeBet('SHORT')">SHORT</button>
+    </div>
+
+    <div style="height:10px"></div>
+    <div id="status" class="muted">—</div>
+    <pre id="debug" class="muted"></pre>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

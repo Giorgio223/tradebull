@@ -1,0 +1,4 @@
+fastapi
+uvicorn[standard]
+upstash-redis
+pydantic-settings
