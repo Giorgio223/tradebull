@@ -1,6 +1,6 @@
 // В проде тут будет твой домен API (например https://api.tradebull.xyz)
 // Пока локально:
-const API = "http://127.0.0.1:8000";
+const API = "https://tradebull-backend.onrender.com";
 
 const el = (id) => document.getElementById(id);
 
